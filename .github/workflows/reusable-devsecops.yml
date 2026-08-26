@@ -193,7 +193,7 @@ jobs:
   deploy:
     name: Production EC2 Deployment
     needs: dast
-
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-ec2.yml
 
     secrets:
