@@ -15,10 +15,13 @@ permissions:
   contents: read
   issues: write
   security-events: write
+  pages: write
+  id-token: write
 
 jobs:
   devsecops:
     name: Reusable DevSecOps Pipeline
+
     uses: ./.github/workflows/reusable-devsecops.yml
 
     secrets:
