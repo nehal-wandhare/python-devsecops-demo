@@ -26,10 +26,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -58,7 +58,7 @@ jobs:
           fi
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-results
           path: artifacts/build/
@@ -76,10 +76,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results
           path: artifacts/tests/
@@ -118,38 +118,84 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarqube-scan-action@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Create SonarQube report information
+      - name: Create SonarQube HTML report
         if: always()
         run: |
           mkdir -p artifacts/sonarqube
 
-          cat > artifacts/sonarqube/README.md <<'EOF'
-          # SonarQube Analysis
+          cat > artifacts/sonarqube/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>SonarQube Analysis</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                margin: 40px;
+                background: #f5f7fa;
+              }
 
-          SonarQube Cloud analysis was executed by the DevSecOps pipeline.
+              .container {
+                max-width: 900px;
+                margin: auto;
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+              }
 
-          The complete analysis is available in the SonarQube Cloud project.
+              h1 {
+                color: #222;
+              }
 
-          Analysis includes:
+              .item {
+                padding: 12px;
+                margin: 8px 0;
+                background: #f1f3f5;
+                border-radius: 6px;
+              }
+            </style>
+          </head>
 
-          - Bugs
-          - Vulnerabilities
-          - Security Hotspots
-          - Code Smells
-          - Code Quality
-          - Coverage
+          <body>
+            <div class="container">
+
+              <h1>SonarQube Analysis</h1>
+
+              <p>
+                SonarQube Cloud analysis was executed successfully
+                as part of the DevSecOps pipeline.
+              </p>
+
+              <h2>Analysis Includes</h2>
+
+              <div class="item">🐞 Bugs</div>
+              <div class="item">🔐 Vulnerabilities</div>
+              <div class="item">🔥 Security Hotspots</div>
+              <div class="item">🧹 Code Smells</div>
+              <div class="item">📊 Code Quality</div>
+              <div class="item">🧪 Coverage</div>
+
+              <p>
+                The detailed analysis is available in the configured
+                SonarQube Cloud project.
+              </p>
+
+            </div>
+          </body>
+          </html>
           EOF
 
       - name: Upload SonarQube information
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sonarqube-results
           path: artifacts/sonarqube/
@@ -167,10 +213,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -203,101 +249,116 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
+          from html import escape
 
           report = Path("artifacts/snyk/snyk-report.json")
           output = Path("artifacts/snyk/index.html")
+
+          vulnerabilities = []
 
           if report.exists():
               try:
                   data = json.loads(report.read_text())
                   vulnerabilities = data.get("vulnerabilities", [])
+              except Exception:
+                  vulnerabilities = []
 
-                  rows = []
+          rows = []
 
-                  for item in vulnerabilities:
-                      package = item.get("packageName", "Unknown")
-                      version = item.get("version", "Unknown")
-                      severity = item.get("severity", "Unknown")
-                      title = item.get("title", "Unknown")
+          for item in vulnerabilities:
+              package = escape(str(item.get("packageName", "Unknown")))
+              version = escape(str(item.get("version", "Unknown")))
+              severity = escape(str(item.get("severity", "Unknown")))
+              title = escape(str(item.get("title", "Unknown")))
 
-                      rows.append(
-                          f"<tr>"
-                          f"<td>{package}</td>"
-                          f"<td>{version}</td>"
-                          f"<td>{severity}</td>"
-                          f"<td>{title}</td>"
-                          f"</tr>"
-                      )
+              rows.append(
+                  f"<tr>"
+                  f"<td>{package}</td>"
+                  f"<td>{version}</td>"
+                  f"<td>{severity}</td>"
+                  f"<td>{title}</td>"
+                  f"</tr>"
+              )
 
-                  html = f"""<!DOCTYPE html>
+          if not rows:
+              rows.append(
+                  "<tr>"
+                  "<td colspan='4'>No vulnerabilities found or report unavailable.</td>"
+                  "</tr>"
+              )
+
+          html = f"""
+          <!DOCTYPE html>
           <html>
           <head>
-          <meta charset="UTF-8">
-          <title>Snyk Security Report</title>
-          <style>
-          body {{
-              font-family: Arial, sans-serif;
-              margin: 40px;
-          }}
-          table {{
-              border-collapse: collapse;
-              width: 100%;
-          }}
-          th, td {{
-              border: 1px solid #ddd;
-              padding: 10px;
-          }}
-          th {{
-              background: #f2f2f2;
-          }}
-          </style>
+            <meta charset="UTF-8">
+            <title>Snyk Security Report</title>
+            <style>
+              body {{
+                font-family: Arial, sans-serif;
+                margin: 40px;
+                background: #f5f7fa;
+              }}
+
+              .container {{
+                max-width: 1100px;
+                margin: auto;
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+              }}
+
+              table {{
+                border-collapse: collapse;
+                width: 100%;
+              }}
+
+              th, td {{
+                border: 1px solid #ddd;
+                padding: 10px;
+              }}
+
+              th {{
+                background: #f2f2f2;
+              }}
+            </style>
           </head>
+
           <body>
 
-          <h1>Snyk Security Report</h1>
+          <div class="container">
 
-          <p>
-          Total vulnerabilities:
-          <strong>{len(vulnerabilities)}</strong>
-          </p>
+            <h1>Snyk Security Report</h1>
 
-          <table>
-          <tr>
-              <th>Package</th>
-              <th>Version</th>
-              <th>Severity</th>
-              <th>Issue</th>
-          </tr>
+            <p>
+              Total vulnerabilities:
+              <strong>{len(vulnerabilities)}</strong>
+            </p>
 
-          {''.join(rows)}
+            <table>
+              <tr>
+                <th>Package</th>
+                <th>Version</th>
+                <th>Severity</th>
+                <th>Issue</th>
+              </tr>
 
-          </table>
+              {''.join(rows)}
+
+            </table>
+
+          </div>
 
           </body>
           </html>
           """
 
-                  output.write_text(html)
-
-              except Exception as exc:
-                  output.write_text(
-                      f"<html><body>"
-                      f"<h1>Snyk Report</h1>"
-                      f"<p>Unable to parse Snyk report: {exc}</p>"
-                      f"</body></html>"
-                  )
-          else:
-              output.write_text(
-                  "<html><body>"
-                  "<h1>Snyk Report</h1>"
-                  "<p>No Snyk JSON report was generated.</p>"
-                  "</body></html>"
-              )
+          output.write_text(html)
           PY
 
       - name: Upload Snyk reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: snyk-results
           path: artifacts/snyk/
@@ -315,10 +376,10 @@ jobs:
 
     steps:
       - name: Checkout application
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -341,7 +402,7 @@ jobs:
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
-          target: "http://127.0.0.1:8080"
+          target: http://127.0.0.1:8080
           token: ${{ github.token }}
           artifact_name: zap-dast-report
           allow_issue_writing: false
@@ -364,9 +425,64 @@ jobs:
             fi
           done
 
+          cat > artifacts/dast/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>OWASP ZAP DAST Report</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                margin: 40px;
+                background: #f5f7fa;
+              }
+
+              .container {
+                max-width: 900px;
+                margin: auto;
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+              }
+
+              a {
+                display: block;
+                margin: 12px 0;
+                padding: 12px;
+                background: #eef2f7;
+                text-decoration: none;
+                color: #222;
+                border-radius: 6px;
+              }
+            </style>
+          </head>
+
+          <body>
+
+          <div class="container">
+
+            <h1>OWASP ZAP DAST Report</h1>
+
+            <p>
+              Dynamic Application Security Testing was performed
+              against the Flask application.
+            </p>
+
+            <a href="./report_html.html">HTML Report</a>
+            <a href="./report_md.md">Markdown Report</a>
+            <a href="./report_json.json">JSON Report</a>
+            <a href="./report_xml.xml">XML Report</a>
+
+          </div>
+
+          </body>
+          </html>
+          EOF
+
       - name: Upload DAST reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dast-results
           path: artifacts/dast/
@@ -405,7 +521,6 @@ jobs:
       - dast
       - deploy
 
-    # Pages should be published only after main deployment.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     runs-on: ubuntu-latest
@@ -422,57 +537,157 @@ jobs:
     steps:
 
       # --------------------------------------------------------
-      # Download build artifact
+      # Download artifacts
       # --------------------------------------------------------
 
       - name: Download build reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: build-results
           path: reports/build
 
-      # --------------------------------------------------------
-      # Download test artifact
-      # --------------------------------------------------------
-
       - name: Download test reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: test-results
           path: reports/tests
 
-      # --------------------------------------------------------
-      # Download SonarQube artifact
-      # --------------------------------------------------------
-
       - name: Download SonarQube reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: sonarqube-results
           path: reports/sonarqube
 
-      # --------------------------------------------------------
-      # Download Snyk artifact
-      # --------------------------------------------------------
-
       - name: Download Snyk reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: snyk-results
           path: reports/snyk
 
-      # --------------------------------------------------------
-      # Download DAST artifact
-      # --------------------------------------------------------
-
       - name: Download DAST reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dast-results
           path: reports/dast
 
+
       # --------------------------------------------------------
-      # Create report dashboard
+      # Create BUILD index page
+      # --------------------------------------------------------
+
+      - name: Create Build report page
+        run: |
+          cat > reports/build/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Build Report</title>
+          </head>
+
+          <body style="font-family:Arial;margin:40px">
+
+            <h1>Build Report</h1>
+
+            <p>Application build completed successfully.</p>
+
+            <h2>Build Files</h2>
+
+            <ul>
+              <li><a href="./app.py">app.py</a></li>
+              <li><a href="./requirements.txt">requirements.txt</a></li>
+            </ul>
+
+            <h3>Application Directories</h3>
+
+            <p>
+              Templates and static files are included in the
+              build artifact.
+            </p>
+
+            <a href="../">← Back to Dashboard</a>
+
+          </body>
+          </html>
+          EOF
+
+
+      # --------------------------------------------------------
+      # Create TEST index page
+      # --------------------------------------------------------
+
+      - name: Create Test report page
+        run: |
+          cat > reports/tests/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Unit Test Report</title>
+          </head>
+
+          <body style="font-family:Arial;margin:40px">
+
+            <h1>Unit Test Report</h1>
+
+            <p>
+              Automated pytest tests were executed with coverage.
+            </p>
+
+            <p>
+              <a href="./coverage/">
+                Open Coverage Report
+              </a>
+            </p>
+
+            <a href="../">← Back to Dashboard</a>
+
+          </body>
+          </html>
+          EOF
+
+
+      # --------------------------------------------------------
+      # Create SONARQUBE index page
+      # --------------------------------------------------------
+
+      - name: Create SonarQube report page
+        run: |
+          cat > reports/sonarqube/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>SonarQube Report</title>
+          </head>
+
+          <body style="font-family:Arial;margin:40px">
+
+            <h1>SonarQube Analysis</h1>
+
+            <p>
+              Static code quality and security analysis
+              was executed by SonarQube Cloud.
+            </p>
+
+            <ul>
+              <li>Bugs</li>
+              <li>Vulnerabilities</li>
+              <li>Security Hotspots</li>
+              <li>Code Smells</li>
+              <li>Code Quality</li>
+              <li>Coverage</li>
+            </ul>
+
+            <a href="../">← Back to Dashboard</a>
+
+          </body>
+          </html>
+          EOF
+
+
+      # --------------------------------------------------------
+      # Create MAIN DASHBOARD
       # --------------------------------------------------------
 
       - name: Generate HTML dashboard
@@ -482,11 +697,13 @@ jobs:
           <html>
 
           <head>
+
             <meta charset="UTF-8">
 
             <title>DevSecOps Pipeline Report</title>
 
             <style>
+
               body {
                 font-family: Arial, sans-serif;
                 margin: 0;
@@ -510,7 +727,8 @@ jobs:
 
               .grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                grid-template-columns:
+                  repeat(auto-fit, minmax(250px, 1fr));
                 gap: 20px;
               }
 
@@ -518,20 +736,12 @@ jobs:
                 background: white;
                 padding: 25px;
                 border-radius: 10px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+                box-shadow:
+                  0 2px 8px rgba(0,0,0,0.08);
               }
 
               .status {
                 font-size: 28px;
-                margin-bottom: 10px;
-              }
-
-              .card h2 {
-                margin-top: 0;
-              }
-
-              a {
-                text-decoration: none;
               }
 
               .links {
@@ -540,18 +750,14 @@ jobs:
 
               .links a {
                 display: inline-block;
-                margin-right: 10px;
+                margin: 5px;
                 padding: 8px 12px;
                 border-radius: 6px;
                 background: #eef2f7;
                 color: #222;
+                text-decoration: none;
               }
 
-              footer {
-                margin-top: 40px;
-                color: #777;
-                font-size: 14px;
-              }
             </style>
 
           </head>
@@ -569,96 +775,157 @@ jobs:
             <div class="grid">
 
               <div class="card">
+
                 <div class="status">✅</div>
+
                 <h2>Build</h2>
-                <p>Application build completed successfully.</p>
+
+                <p>
+                  Application build completed successfully.
+                </p>
 
                 <div class="links">
-                  <a href="./build/">View Build</a>
+                  <a href="./build/">
+                    View Build
+                  </a>
                 </div>
+
               </div>
 
 
               <div class="card">
+
                 <div class="status">✅</div>
+
                 <h2>Unit Tests</h2>
-                <p>Automated tests and coverage report.</p>
+
+                <p>
+                  Automated tests and coverage.
+                </p>
 
                 <div class="links">
-                  <a href="./tests/coverage/">Coverage</a>
+                  <a href="./tests/">
+                    Test Report
+                  </a>
+
+                  <a href="./tests/coverage/">
+                    Coverage
+                  </a>
                 </div>
+
               </div>
 
 
               <div class="card">
+
                 <div class="status">✅</div>
+
                 <h2>SonarQube</h2>
-                <p>Static code quality and security analysis.</p>
+
+                <p>
+                  Static code quality and security analysis.
+                </p>
 
                 <div class="links">
-                  <a href="./sonarqube/">Report</a>
+                  <a href="./sonarqube/">
+                    Report
+                  </a>
                 </div>
+
               </div>
 
 
               <div class="card">
+
                 <div class="status">✅</div>
+
                 <h2>Snyk</h2>
-                <p>Python dependency security analysis.</p>
+
+                <p>
+                  Python dependency security analysis.
+                </p>
 
                 <div class="links">
-                  <a href="./snyk/">HTML Report</a>
-                  <a href="./snyk/snyk-report.json">JSON</a>
+                  <a href="./snyk/">
+                    HTML Report
+                  </a>
+
+                  <a href="./snyk/snyk-report.json">
+                    JSON
+                  </a>
                 </div>
+
               </div>
 
 
               <div class="card">
+
                 <div class="status">✅</div>
+
                 <h2>DAST</h2>
-                <p>OWASP ZAP dynamic application security testing.</p>
+
+                <p>
+                  OWASP ZAP dynamic security testing.
+                </p>
 
                 <div class="links">
-                  <a href="./dast/report_html.html">HTML</a>
-                  <a href="./dast/report_json.json">JSON</a>
-                  <a href="./dast/report_xml.xml">XML</a>
+
+                  <a href="./dast/">
+                    DAST Dashboard
+                  </a>
+
+                  <a href="./dast/report_html.html">
+                    HTML
+                  </a>
+
+                  <a href="./dast/report_json.json">
+                    JSON
+                  </a>
+
                 </div>
+
               </div>
 
 
               <div class="card">
+
                 <div class="status">✅</div>
+
                 <h2>EC2 Deployment</h2>
-                <p>Application deployed to production EC2.</p>
+
+                <p>
+                  Application deployed to production EC2.
+                </p>
+
               </div>
 
             </div>
 
-            <footer>
-              Generated automatically by GitHub Actions.
-            </footer>
-
           </div>
 
           </body>
+
           </html>
           EOF
 
+
       # --------------------------------------------------------
-      # Configure GitHub Pages
+      # Configure Pages
       # --------------------------------------------------------
 
       - name: Setup GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
+
 
       # --------------------------------------------------------
       # Upload Pages artifact
       # --------------------------------------------------------
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
           path: reports
+
 
       # --------------------------------------------------------
       # Deploy Pages
@@ -666,4 +933,37 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+
+
+      # --------------------------------------------------------
+      # ADD LINKS TO GITHUB ACTIONS SUMMARY
+      # --------------------------------------------------------
+
+      - name: Add DevSecOps report links to workflow summary
+        if: success()
+        run: |
+
+          PAGE_URL="${{ steps.deployment.outputs.page_url }}"
+
+          PAGE_URL="${PAGE_URL%/}"
+
+          {
+            echo "# 📊 DevSecOps Reports"
+            echo ""
+            echo "GitHub Pages reports generated successfully."
+            echo ""
+            echo "## 🔗 Report Links"
+            echo ""
+            echo "- 🌐 [DevSecOps Dashboard](${PAGE_URL}/)"
+            echo "- 🏗️ [Build Report](${PAGE_URL}/build/)"
+            echo "- 🧪 [Unit Tests](${PAGE_URL}/tests/)"
+            echo "- 📈 [Coverage Report](${PAGE_URL}/tests/coverage/)"
+            echo "- 🔍 [SonarQube Report](${PAGE_URL}/sonarqube/)"
+            echo "- 🛡️ [Snyk Report](${PAGE_URL}/snyk/)"
+            echo "- 🚨 [OWASP ZAP DAST Report](${PAGE_URL}/dast/)"
+            echo ""
+            echo "## 🚀 Deployment"
+            echo ""
+            echo "- [Production GitHub Pages](${PAGE_URL}/)"
+          } >> "$GITHUB_STEP_SUMMARY"
