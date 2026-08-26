@@ -1,0 +1,75 @@
+name: Reusable EC2 Deployment
+
+on:
+  workflow_call:
+    secrets:
+      EC2_HOST:
+        required: true
+      EC2_USERNAME:
+        required: true
+      EC2_SSH_KEY:
+        required: true
+
+jobs:
+  deploy:
+    name: Deploy Application to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Prepare application directory
+        shell: bash
+        run: |
+          ssh \
+            -i ~/.ssh/ec2_key \
+            "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
+            "sudo mkdir -p /var/www/python-devsecops-demo && sudo chown -R ${{
+              secrets.EC2_USERNAME
+            }}:${{
+              secrets.EC2_USERNAME
+            }} /var/www/python-devsecops-demo"
+
+      - name: Upload application
+        shell: bash
+        run: |
+          rsync -az --delete \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude "venv/" \
+            --exclude "__pycache__/" \
+            --exclude ".pytest_cache/" \
+            -e "ssh -i ~/.ssh/ec2_key" \
+            ./ \
+            "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}:/var/www/python-devsecops-demo/"
+
+      - name: Install dependencies and restart application
+        shell: bash
+        run: |
+          ssh \
+            -i ~/.ssh/ec2_key \
+            "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" \
+            "cd /var/www/python-devsecops-demo && \
+             python3 -m venv venv && \
+             ./venv/bin/pip install --upgrade pip && \
+             ./venv/bin/pip install -r requirements.txt && \
+             ./venv/bin/pip install gunicorn && \
+             sudo systemctl daemon-reload && \
+             sudo systemctl enable python-devsecops && \
+             sudo systemctl restart python-devsecops"
+
+      - name: Verify deployment
+        shell: bash
+        run: |
+          sleep 5
+          curl --fail --silent --show-error \
+            "http://${{ secrets.EC2_HOST }}/health"
